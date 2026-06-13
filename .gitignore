@@ -1,0 +1,19 @@
+# SwiftPM build output
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Local Claude Code settings (personal, not for the repo)
+.claude/settings.local.json
+
+# Xcode (if a project is ever generated)
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# Local probe / scratch files (never commit decrypted credentials)
+*.probe
+cb_probe.py
