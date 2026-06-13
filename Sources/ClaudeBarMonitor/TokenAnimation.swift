@@ -25,6 +25,14 @@ enum TokenAnimation {
     /// coin floats on the dark Touch Bar.
     static func loadFrames() -> [NSImage] {
         guard let dirURL = bundleDirectory() else { return [] }
+
+        // Preferred source: an animated GIF whose frames are already separate
+        // and transparent — no slicing or background knockout needed.
+        let gif = loadGIFFrames(in: dirURL)
+        if !gif.isEmpty { return gif }
+
+        // Fallbacks: numbered PNGs, then a single sprite sheet (white knocked
+        // out to transparency for the dark Touch Bar).
         let numbered = loadNumberedFrames(in: dirURL)
         let raw = numbered.isEmpty ? loadSpriteSheet(in: dirURL) : numbered
         return raw.map { removingWhiteBackground($0) ?? $0 }
@@ -34,6 +42,26 @@ enum TokenAnimation {
 
     private static func bundleDirectory() -> URL? {
         Bundle.module.url(forResource: framesDir, withExtension: nil)
+    }
+
+    // MARK: - Animated GIF
+
+    /// Load every frame of `token.gif` in order via ImageIO. Returns `[]` if the
+    /// GIF is absent or unreadable.
+    private static func loadGIFFrames(in dir: URL) -> [NSImage] {
+        let gifURL = dir.appendingPathComponent("token.gif")
+        guard let source = CGImageSourceCreateWithURL(gifURL as CFURL, nil) else { return [] }
+        let count = CGImageSourceGetCount(source)
+        guard count > 0 else { return [] }
+
+        var frames: [NSImage] = []
+        frames.reserveCapacity(count)
+        for i in 0..<count {
+            guard let cg = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
+            frames.append(NSImage(cgImage: cg,
+                                  size: NSSize(width: cg.width, height: cg.height)))
+        }
+        return frames
     }
 
     // MARK: - Numbered PNG frames
