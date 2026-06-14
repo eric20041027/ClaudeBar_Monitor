@@ -6,15 +6,17 @@
 |----------|--------|---------|
 | `~/Library/Application Support/Claude/Cookies` | **read-only** | Read the encrypted `sessionKey` and `lastActiveOrg` cookies. |
 | Keychain item `Claude Safe Storage` | **read** | Obtain the AES passphrase to decrypt the above. macOS gates this with a user prompt. |
-| `https://claude.ai/api/organizations/{org}/usage` | **HTTPS GET** | Fetch usage numbers. One request per poll. |
+| `https://claude.ai/api/organizations/{org}/usage` | **HTTPS GET** | Fetch usage numbers. One request every 4 minutes. |
+| `~/.claude/metrics/costs.jsonl` | **read-only** | Read the official cumulative cost (`estimated_cost_usd`) of the active Claude Code session. Local file; tail-read. |
+| `~/.claude/projects/**/*.jsonl` | **read-only** | Identify the active session (newest transcript) and, as a fallback, price its token usage. Local files. |
 
-That is the complete list. No other files, hosts, or services are touched.
+That is the complete list. No other files, hosts, or services are touched. The cost face is **entirely local** — it makes no network requests at all.
 
 ## What it does NOT do
 
 - **Does not write or cache credentials.** The decrypted `sessionKey` lives only in memory for the duration of a request. It is never written to disk, never logged, never printed.
-- **Does not send your data anywhere except `claude.ai`.** There is no telemetry, no analytics, no third-party host.
-- **Does not modify** the Claude app, its cookies, or your account in any way. It is strictly read-only on local state.
+- **Does not send your data anywhere except `claude.ai`** (usage only). The cost face reads local Claude Code files and sends nothing. There is no telemetry, no analytics, no third-party host.
+- **Does not modify** the Claude app, its cookies, your Claude Code transcripts, or your account in any way. It is strictly read-only on local state.
 
 ## Why Keychain access is required
 
@@ -27,6 +29,7 @@ If you fork or contribute, **never commit**:
 - Decrypted cookie values, `sessionKey`, or `sessionKeyLC`.
 - Your organization UUID (`lastActiveOrg`).
 - Any `Cookies` SQLite file or copy thereof.
+- Any Claude Code transcript (`~/.claude/projects/**/*.jsonl`) or `costs.jsonl` — they can contain prompt content and session ids.
 - Local probe/scratch scripts that print decrypted values.
 
 `.gitignore` excludes build output and common scratch-file patterns. The source code itself contains **no secrets** — only the public Chromium decryption constants (`saltysalt`, iteration count, etc.), which are not sensitive.
