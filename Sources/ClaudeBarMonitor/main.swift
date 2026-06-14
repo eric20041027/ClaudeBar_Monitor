@@ -6,9 +6,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let client = UsageClient()
     private var controller: TouchBarController!
 
-    // Session cost shown on the gauge's alternate (tap-to-toggle) face. Demo data
-    // for now; swap the provider for a transcript-backed one to show real spend.
-    private let costProvider: CostProviding = DemoCostProvider()
+    // Session cost shown on the gauge's alternate (tap-to-toggle) face. Real
+    // spend, computed from the newest Claude Code transcript.
+    private let costProvider: CostProviding = TranscriptCostProvider()
 
     private var timer: Timer?
     private var lastResult: UsageResult = .needsLogin
@@ -26,9 +26,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() {
-        // Cost is local/synchronous; update it immediately each tick. It shows on
-        // the item's alternate face (tap to toggle from the usage gauge).
-        controller.updateCost(CostDisplay.from(cost: costProvider.currentSessionCost()))
+        // The transcript can be multi-MB, so price it off the main thread and
+        // hop back to update the Touch Bar. Capture into a local `let` to avoid
+        // capturing the implicitly-unwrapped `var controller` in the closure.
+        let costController = controller!
+        let provider = costProvider
+        Task.detached {
+            let cost = provider.currentSessionCost()
+            await MainActor.run {
+                costController.updateCost(CostDisplay.from(cost: cost))
+            }
+        }
 
         Task {
             let result = await client.fetch()
