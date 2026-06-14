@@ -55,6 +55,14 @@ install() {
         cp -R "$src/$BUNDLE_NAME" "$INSTALL_DIR/"
     fi
 
+    # Re-sign the COPY. The release binary is ad-hoc (linker-signed); copying it
+    # to a new path invalidates that signature under launchd's stricter check,
+    # so the agent is killed with OS_REASON_CODESIGNING even though the same
+    # binary runs fine in the foreground. A fresh ad-hoc signature on the
+    # installed copy fixes it.
+    codesign --force --sign - "$INSTALL_DIR/$BIN_NAME" >/dev/null 2>&1 || \
+        echo "    WARN: codesign failed; agent may be killed (OS_REASON_CODESIGNING)." >&2
+
     echo "==> Writing LaunchAgent plist"
     mkdir -p "$(dirname "$PLIST")"
     cat > "$PLIST" <<PLIST_EOF

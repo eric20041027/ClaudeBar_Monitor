@@ -7,10 +7,18 @@ loop at the controller's 10fps. Output lands in
 ``Sources/ClaudeBarMonitor/Resources/cost-frames/`` as ``calm.gif``,
 ``busy.gif`` and ``hot.gif`` — the filenames ``CostLevel.gifName`` expects.
 
-The engineer is a side-view chibi at a laptop, drawn on a GRID-px grid then
+The engineer is a side-view chibi drawn on a GRID-px grid then
 nearest-neighbour upscaled so it stays crisp. The three states share the same
-body/desk so only the mood (arms, sweat, shake) differs, matching the
+body so only the mood (arms, sweat, shake) differs, matching the
 calm->busy->hot cost progression.
+
+The figure FILLS the canvas: there is no desk, and after drawing, every frame
+is tightly cropped to the union bounding box of all frames in the set (a shared
+crop so the figure doesn't jitter between frames). This matters because the
+Touch Bar aspect-fits the GIF into a tiny ~28pt box — if the figure occupied
+only the centre of a padded canvas it would shrink to an unreadable blob that
+looks coin-ish (the engineer-not-showing bug). Filling the canvas keeps the
+engineer recognisable at Control Strip size.
 """
 
 from __future__ import annotations
@@ -39,11 +47,7 @@ HOODIE = (74, 110, 162, 255)      # calm blue
 HOODIE_SH = (52, 80, 122, 255)
 OUTLINE = (28, 24, 30, 255)
 HEADPHONE = (40, 40, 46, 255)
-LAPTOP = (54, 58, 68, 255)
-LAPTOP_LID = (74, 80, 92, 255)
-SCREEN = (150, 220, 255, 255)
 SWEAT = (120, 205, 255, 255)
-DESK = (96, 74, 58, 255)
 
 
 def _grid_image() -> tuple[Image.Image, ImageDraw.ImageDraw]:
@@ -59,18 +63,6 @@ def px(d: ImageDraw.ImageDraw, x: int, y: int, color) -> None:
 
 def rect(d, x0, y0, x1, y1, color) -> None:
     d.rectangle([x0, y0, x1, y1], fill=color)
-
-
-def draw_desk(d) -> None:
-    """Shared desk + laptop base along the bottom."""
-    rect(d, 4, 28, 30, 30, DESK)
-    rect(d, 4, 31, 30, 31, OUTLINE)
-    # Laptop base (keyboard deck) and raised lid with a glowing screen.
-    rect(d, 18, 24, 28, 27, LAPTOP)
-    rect(d, 18, 27, 28, 27, OUTLINE)
-    rect(d, 19, 14, 28, 24, OUTLINE)        # lid outline
-    rect(d, 20, 15, 27, 23, LAPTOP_LID)
-    rect(d, 21, 16, 26, 22, SCREEN)
 
 
 def draw_body(d, lean: int = 0) -> None:
@@ -117,8 +109,41 @@ def draw_sweat(d, drops) -> None:
         px(d, x, y - 1, SWEAT)
 
 
-def upscale(img: Image.Image) -> Image.Image:
-    return img.resize((CANVAS, CANVAS), Image.NEAREST)
+# Extra logical-grid pixels kept around the figure after the tight crop, so the
+# outline isn't flush to the GIF edge. Tiny — the whole point is to fill.
+CROP_MARGIN = 1
+
+
+def union_bbox(frames: list[Image.Image]) -> tuple[int, int, int, int]:
+    """Bounding box (left, top, right, bottom) covering the opaque content of
+    EVERY frame, padded by CROP_MARGIN and clamped to the grid. Shared across
+    the set so the cropped figure stays put instead of jittering frame to frame.
+    """
+    box: tuple[int, int, int, int] | None = None
+    for f in frames:
+        bb = f.getbbox()  # bbox of non-zero (here: non-transparent) pixels
+        if bb is None:
+            continue
+        box = bb if box is None else (
+            min(box[0], bb[0]), min(box[1], bb[1]),
+            max(box[2], bb[2]), max(box[3], bb[3]),
+        )
+    if box is None:
+        return (0, 0, GRID, GRID)
+    return (
+        max(0, box[0] - CROP_MARGIN),
+        max(0, box[1] - CROP_MARGIN),
+        min(GRID, box[2] + CROP_MARGIN),
+        min(GRID, box[3] + CROP_MARGIN),
+    )
+
+
+def tight_crop(frames: list[Image.Image]) -> list[Image.Image]:
+    """Crop every frame to the shared union bbox so the engineer FILLS the
+    canvas — no padded margins that would shrink it to a blob in the ~28pt
+    Touch Bar box."""
+    bbox = union_bbox(frames)
+    return [f.crop(bbox) for f in frames]
 
 
 # ---- State builders: each returns a list of logical-grid frames. ----
@@ -128,7 +153,6 @@ def frames_calm() -> list[Image.Image]:
     out = []
     for hand_y in (24, 23, 24, 25):
         img, d = _grid_image()
-        draw_desk(d)
         draw_body(d, lean=0)
         draw_arm(d, hand_y, lean=0)
         out.append(img)
@@ -141,7 +165,6 @@ def frames_busy() -> list[Image.Image]:
     out = []
     for hand_y, drops in poses:
         img, d = _grid_image()
-        draw_desk(d)
         draw_body(d, lean=1)
         draw_arm(d, hand_y, lean=1)
         draw_sweat(d, drops)
@@ -157,7 +180,6 @@ def frames_hot() -> list[Image.Image]:
                          (-1, [(7, 9), (20, 12)]),
                          (1, [(6, 10), (21, 11)])):
         img, d = _grid_image()
-        draw_desk(d)
         draw_body(d, lean=shake)
         # Worried mouth (override the smile area).
         px(d, 15 + shake, 14, OUTLINE)
@@ -172,8 +194,18 @@ def frames_hot() -> list[Image.Image]:
     return out
 
 
+def scale_up(img: Image.Image, target: int) -> Image.Image:
+    """Nearest-neighbour scale so the longest side becomes `target` px, keeping
+    aspect ratio. Cropped frames aren't square, so scale by the longest side
+    rather than forcing a square canvas."""
+    w, h = img.size
+    factor = max(1, target // max(w, h))
+    return img.resize((w * factor, h * factor), Image.NEAREST)
+
+
 def save_gif(frames: list[Image.Image], name: str) -> str:
-    big = [upscale(f) for f in frames]
+    cropped = tight_crop(frames)
+    big = [scale_up(f, CANVAS) for f in cropped]
     path = os.path.abspath(os.path.join(OUT_DIR, name))
     big[0].save(
         path, save_all=True, append_images=big[1:], duration=FRAME_MS,
