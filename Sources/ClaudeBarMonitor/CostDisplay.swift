@@ -14,6 +14,18 @@ enum CostLevel {
         case .hot:  return .systemRed
         }
     }
+
+    /// Pixel-engineer GIF for this cost level, bundled under `cost-frames`.
+    /// calm = leisurely typing, busy = fast typing, hot = head-in-hands panic.
+    /// When the per-level file is missing the loader falls back to the single
+    /// `engineer.gif`, then to the token coin, so the face is never blank.
+    var gifName: String {
+        switch self {
+        case .calm: return "calm.gif"
+        case .busy: return "busy.gif"
+        case .hot:  return "hot.gif"
+        }
+    }
 }
 
 /// Display model derived from a session cost (USD). Pure mapping, no I/O.
@@ -22,10 +34,10 @@ struct CostDisplay {
     let text: String
     let level: CostLevel
 
-    /// USD thresholds separating calm / busy / hot. Demo values; tune once the
-    /// real transcript-backed cost is wired in.
-    static let busyThreshold = 5.0
-    static let hotThreshold = 12.0
+    /// USD thresholds separating calm / busy / hot session cost.
+    /// calm < $10 ≤ busy < $25 ≤ hot.
+    static let busyThreshold = 10.0
+    static let hotThreshold = 25.0
 
     static func from(cost: Double) -> CostDisplay {
         let level: CostLevel
