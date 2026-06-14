@@ -96,6 +96,8 @@ The cost face reports the running spend of the Claude Code session you are activ
 
 **Which session.** The *active session* is the single newest-mtime `.jsonl` under `~/.claude/projects` (excluding `observer-sessions`, which background tooling writes constantly). Its filename stem is the `session_id`. In practice this is the session that most recently *sent a message* — switching the displayed session happens "on send", not "on click into the list". This is a deliberate, accepted limitation: with multiple Claude Code sessions running in the desktop app in parallel, no readable file reliably identifies the foreground window, so newest-write is the best available signal.
 
+> This was confirmed empirically: snapshotting every state file under `~/Library/Application Support/Claude/` across a session-window switch (without sending a prompt) showed **zero files modified**. The Chromium-based desktop app keeps foreground focus in memory and flushes nothing on a focus change, so file-watching for "which window is in focus" is impossible in principle. See [USAGE.md → How the displayed session switches](USAGE.md#how-the-displayed-session-switches) for the user-facing summary.
+
 **How much.** Claude Code records the official cost itself in `~/.claude/metrics/costs.jsonl` — one JSON line per request:
 
 ```jsonc

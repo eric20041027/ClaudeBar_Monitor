@@ -36,7 +36,23 @@ The Control Strip item has **two faces** — **tap it to toggle** between the us
 |---------|---------|
 | `$12.34` | Cumulative cost of your **active Claude Code session** — the one you most recently sent a prompt in. Orange = calm, yellow = busy, red = hot, as spend climbs. |
 
-The cost is the official `estimated_cost_usd` Claude Code records locally (the same number its cost-warning hook reports). It updates within ~30s of finishing a prompt, or instantly if you tap. Switching which session is shown happens when you **send a prompt** in another session, not merely by clicking into it. If a read ever fails it keeps showing the last good number — the cost face never blanks or errors.
+The cost is the official `estimated_cost_usd` Claude Code records locally (the same number its cost-warning hook reports). If a read ever fails it keeps showing the last good number — the cost face never blanks or errors.
+
+## How the displayed session switches
+
+If you run several Claude Code sessions at once, the cost face shows **one** of them — the one you are actively working in. Here is exactly how and when it switches, and why it works this way.
+
+**The trigger is sending a prompt, not clicking into a session.** The app decides "which session is active" by finding the most recently written transcript under `~/.claude/projects`. A transcript is only written when a session **sends a prompt / receives a reply** — so:
+
+| You do this… | Cost face shows… |
+|---|---|
+| Send a prompt in session B | Switches to **B** within ~30s (instant if you tap the gauge) |
+| Click into session B's window but don't type | **No switch** — still shows the previously active session |
+| Background session B finishes a long reply while you sit in A | May briefly flip to **B**, because B just wrote its transcript |
+
+**How fast it updates.** After a prompt finishes, three things chain together: the transcript is written (instant → that session becomes active), Claude Code appends the official cost to `costs.jsonl` (seconds), and the next **30-second** cost poll reads it. Worst case ≈ 30s; **tap the Control Strip item to refresh both faces immediately.**
+
+**Why not "switch on click-in."** This is a deliberate, **empirically confirmed** limitation, not a bug. Claude Code runs inside the Chromium-based desktop app, which keeps "which window/session has focus" in memory and writes **nothing to disk when you merely switch windows** (verified by snapshotting every app state file across a window switch — zero files changed). A background agent therefore has no readable signal for foreground focus; the most-recently-written transcript is the best available proxy. Reading live focus would require Accessibility/CDP access that can't see in-window session switches and breaks on app updates, so it is intentionally not attempted.
 
 ## Stop
 
