@@ -1,6 +1,14 @@
 import AppKit
 
-private let pollInterval: TimeInterval = 4 * 60   // 4 minutes (spec: 3-5 min)
+/// How often to refresh the 5h usage gauge. This hits the Claude API, so it
+/// stays infrequent to avoid hammering the endpoint / rate limits.
+private let usagePollInterval: TimeInterval = 4 * 60   // 4 minutes (spec: 3-5 min)
+
+/// How often to refresh the session cost. This only reads local files
+/// (costs.jsonl tail + the newest transcript), so it can poll often and cheaply
+/// — a cost update then lands within ~30s of finishing a prompt. Tapping the
+/// gauge also forces an immediate refresh (see `handleTap`).
+private let costPollInterval: TimeInterval = 30   // 30 seconds
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let client = UsageClient()
@@ -10,22 +18,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // spend, computed from the newest Claude Code transcript.
     private let costProvider: CostProviding = TranscriptCostProvider()
 
-    private var timer: Timer?
+    private var usageTimer: Timer?
+    private var costTimer: Timer?
     private var lastResult: UsageResult = .needsLogin
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller = TouchBarController(onTap: { [weak self] in self?.handleTap() })
 
-        // Immediate first refresh, then poll.
-        refresh()
-        let t = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) {
-            [weak self] _ in self?.refresh()
+        // Immediate first refresh of both, then poll each on its own cadence:
+        // usage (API) slowly, cost (local files) frequently.
+        refreshUsage()
+        refreshCost()
+
+        let ut = Timer.scheduledTimer(withTimeInterval: usagePollInterval, repeats: true) {
+            [weak self] _ in self?.refreshUsage()
         }
-        t.tolerance = 30
-        timer = t
+        ut.tolerance = 30
+        usageTimer = ut
+
+        let ct = Timer.scheduledTimer(withTimeInterval: costPollInterval, repeats: true) {
+            [weak self] _ in self?.refreshCost()
+        }
+        ct.tolerance = 5
+        costTimer = ct
     }
 
-    private func refresh() {
+    /// Refresh the session cost from local files (cheap; polled often).
+    private func refreshCost() {
         // The transcript can be multi-MB, so price it off the main thread and
         // hop back to update the Touch Bar. Capture into a local `let` to avoid
         // capturing the implicitly-unwrapped `var controller` in the closure.
@@ -37,7 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 costController.updateCost(CostDisplay.from(cost: cost))
             }
         }
+    }
 
+    /// Refresh the 5h usage gauge from the Claude API (polled infrequently).
+    private func refreshUsage() {
         Task {
             let result = await client.fetch()
             lastResult = result
@@ -54,8 +76,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.openApplication(
                 at: claudeURL, configuration: NSWorkspace.OpenConfiguration())
         }
-        // Tapping always triggers an immediate refresh too.
-        refresh()
+        // Tapping always triggers an immediate refresh of both faces too, so a
+        // user who just switched session and wants the number now gets it.
+        refreshCost()
+        refreshUsage()
     }
 }
 
