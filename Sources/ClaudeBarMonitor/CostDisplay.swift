@@ -1,0 +1,45 @@
+import AppKit
+
+/// How "busy"/expensive the current session looks, mapped from cumulative cost.
+/// Reuses the gauge palette: low = calm (orange), mid = warning (yellow),
+/// high = danger (red). Drives both the text colour and, later, which pixel
+/// engineer animation plays.
+enum CostLevel {
+    case calm, busy, hot
+
+    var color: NSColor {
+        switch self {
+        case .calm: return StatusLevel.claudeOrange
+        case .busy: return .systemYellow
+        case .hot:  return .systemRed
+        }
+    }
+}
+
+/// Display model derived from a session cost (USD). Pure mapping, no I/O.
+struct CostDisplay {
+    /// Objective cost shown next to the engineer, e.g. "$3.42".
+    let text: String
+    let level: CostLevel
+
+    /// USD thresholds separating calm / busy / hot. Demo values; tune once the
+    /// real transcript-backed cost is wired in.
+    static let busyThreshold = 5.0
+    static let hotThreshold = 12.0
+
+    static func from(cost: Double) -> CostDisplay {
+        let level: CostLevel
+        switch cost {
+        case ..<busyThreshold: level = .calm
+        case busyThreshold..<hotThreshold: level = .busy
+        default: level = .hot
+        }
+        return CostDisplay(text: format(cost), level: level)
+    }
+
+    /// "$3.42"; below $10 keep cents, above round to whole dollars to stay short
+    /// in the narrow Control Strip.
+    private static func format(_ cost: Double) -> String {
+        cost < 10 ? String(format: "$%.2f", cost) : String(format: "$%.0f", cost)
+    }
+}

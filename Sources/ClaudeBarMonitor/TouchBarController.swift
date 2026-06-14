@@ -1,20 +1,9 @@
 import AppKit
 
-// Private DFR (DigitalFunctionRow) entry points for placing an item directly
-// into the Control Strip. Declared via dlsym so the build does not link a
-// private framework. NOTE: this layer is unverified on a no-Touch-Bar dev
-// machine — it must be tested on the real Touch Bar hardware.
-private typealias DFRPresenceFn = @convention(c) (NSString, Bool) -> Void
-
-private let dfrHandle: UnsafeMutableRawPointer? =
-    dlopen("/System/Library/PrivateFrameworks/DFRFoundation.framework/DFRFoundation", RTLD_NOW)
-
-private let dfrSetPresence: DFRPresenceFn? = {
-    guard let h = dfrHandle,
-          let sym = dlsym(h, "DFRElementSetControlStripPresenceForIdentifier")
-    else { return nil }
-    return unsafeBitCast(sym, to: DFRPresenceFn.self)
-}()
+// Control Strip placement uses two private APIs: `+[NSTouchBarItem
+// addSystemTrayItem:]` (called via the ObjC runtime below) and the DFR presence
+// toggle (wrapped in ControlStripPresence). Both degrade to a safe no-op if the
+// symbol is missing.
 
 /// Owns the Control Strip item and updates its gauge image.
 final class TouchBarController: NSObject, NSTouchBarDelegate {
@@ -75,7 +64,7 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         if NSTouchBarItem.responds(to: sel) {
             _ = (NSTouchBarItem.self as AnyObject).perform(sel, with: item)
         }
-        dfrSetPresence?(Self.itemIdentifier.rawValue as NSString, true)
+        ControlStripPresence.set(Self.itemIdentifier.rawValue, present: true)
     }
 
     /// Store the latest status and redraw. Called from the poll loop.
