@@ -29,7 +29,12 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
 
     /// Animation frames per face; either may be empty (text-only fallback).
     private let gaugeFrames: [NSImage]
-    private let costFrames: [NSImage]
+    /// Engineer frames keyed by cost level (calm/busy/hot). A level maps to its
+    /// own GIF; levels with no bundled GIF fall back to `costFallbackFrames`.
+    private let costFramesByLevel: [CostLevel: [NSImage]]
+    /// Shared fallback when a level's per-level GIF is absent: the single
+    /// `engineer.gif`, or the token coin if that's missing too.
+    private let costFallbackFrames: [NSImage]
     private var frameIndex = 0
     private var animationTimer: Timer?
 
@@ -43,11 +48,22 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     init(onTap: @escaping () -> Void) {
         self.onTap = onTap
         self.gaugeFrames = TokenAnimation.loadFrames()
-        // Prefer the pixel engineer GIF; until the user supplies it, fall back to
-        // the token GIF so the cost face is never blank during the demo.
+
+        // Shared fallback for the cost face: the single `engineer.gif`, or the
+        // token coin if that's missing too, so the face is never blank.
         let engineer = TokenAnimation.loadFrames(directory: "cost-frames",
                                                  gifName: "engineer.gif")
-        self.costFrames = engineer.isEmpty ? self.gaugeFrames : engineer
+        self.costFallbackFrames = engineer.isEmpty ? self.gaugeFrames : engineer
+
+        // Per-level engineer GIFs (calm/busy/hot). Each is optional; absent
+        // levels resolve to `costFallbackFrames` at render time.
+        let levels: [CostLevel] = [.calm, .busy, .hot]
+        self.costFramesByLevel = Dictionary(uniqueKeysWithValues: levels.compactMap {
+            level in
+            let frames = TokenAnimation.loadFrames(directory: "cost-frames",
+                                                   gifName: level.gifName)
+            return frames.isEmpty ? nil : (level, frames)
+        })
 
         self.button = NSButton(title: "🤖 …", target: nil, action: nil)
         super.init()
@@ -64,15 +80,24 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         animationTimer?.invalidate()
     }
 
-    /// Frames for the current face.
+    /// Frames for the current face. The cost face picks the engineer GIF for the
+    /// latest cost level, falling back to the shared engineer/coin frames.
     private var frames: [NSImage] {
-        mode == .cost ? costFrames : gaugeFrames
+        mode == .cost ? currentCostFrames : gaugeFrames
+    }
+
+    /// Engineer frames for the latest cost level, or the shared fallback when
+    /// that level has no bundled GIF.
+    private var currentCostFrames: [NSImage] {
+        costFramesByLevel[lastCost.level] ?? costFallbackFrames
     }
 
     /// Drive the animation loop. Steps the shared frame index; redraws using the
     /// current face's frames. No-op when neither face has frames to cycle.
     private func startAnimation() {
-        guard gaugeFrames.count > 1 || costFrames.count > 1 else { return }
+        let anyCostAnimated = costFallbackFrames.count > 1
+            || costFramesByLevel.values.contains { $0.count > 1 }
+        guard gaugeFrames.count > 1 || anyCostAnimated else { return }
         let t = Timer.scheduledTimer(withTimeInterval: 1 / Self.animationFPS, repeats: true) {
             [weak self] _ in
             guard let self else { return }
@@ -143,9 +168,10 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     /// never truncates). Falls back to text-only when no frames are bundled.
     private func renderCost() {
         let display = lastCost
-        let frame = costFrames.isEmpty
+        let levelFrames = currentCostFrames
+        let frame = levelFrames.isEmpty
             ? nil
-            : costFrames[min(frameIndex, costFrames.count - 1)]
+            : levelFrames[min(frameIndex, levelFrames.count - 1)]
         let image = CostRenderer.image(for: display, icon: frame)
         button.imagePosition = .imageOnly
         button.image = image
