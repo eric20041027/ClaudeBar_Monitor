@@ -6,9 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let client = UsageClient()
     private var controller: TouchBarController!
 
-    // Session-cost item (left of the usage gauge). Demo data for now; swap the
-    // provider for a transcript-backed one to show real spend.
-    private var costController: CostBarController!
+    // Session cost shown on the gauge's alternate (tap-to-toggle) face. Demo data
+    // for now; swap the provider for a transcript-backed one to show real spend.
     private let costProvider: CostProviding = DemoCostProvider()
 
     private var timer: Timer?
@@ -16,7 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller = TouchBarController(onTap: { [weak self] in self?.handleTap() })
-        costController = CostBarController(onTap: { [weak self] in self?.refresh() })
 
         // Immediate first refresh, then poll.
         refresh()
@@ -28,8 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() {
-        // Cost is local/synchronous; update it immediately each tick.
-        costController.update(CostDisplay.from(cost: costProvider.currentSessionCost()))
+        // Cost is local/synchronous; update it immediately each tick. It shows on
+        // the item's alternate face (tap to toggle from the usage gauge).
+        controller.updateCost(CostDisplay.from(cost: costProvider.currentSessionCost()))
 
         Task {
             let result = await client.fetch()
