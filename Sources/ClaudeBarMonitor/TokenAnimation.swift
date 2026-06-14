@@ -23,12 +23,19 @@ enum TokenAnimation {
     /// Load and return the ordered animation frames, or `[]` if none found.
     /// Each frame has its white background knocked out to transparency so the
     /// coin floats on the dark Touch Bar.
-    static func loadFrames() -> [NSImage] {
-        guard let dirURL = bundleDirectory() else { return [] }
+    ///
+    /// - Parameters:
+    ///   - directory: the resource subfolder to load from (default `token-frames`).
+    ///   - gifName: the preferred animated-GIF filename within `directory`
+    ///     (default `token.gif`). The other layouts (numbered PNGs, sprite sheet)
+    ///     are only used by the legacy token folder and ignore this parameter.
+    static func loadFrames(directory: String = framesDir,
+                           gifName: String = "token.gif") -> [NSImage] {
+        guard let dirURL = bundleDirectory(directory) else { return [] }
 
         // Preferred source: an animated GIF whose frames are already separate
         // and transparent — no slicing or background knockout needed.
-        let gif = loadGIFFrames(in: dirURL)
+        let gif = loadGIFFrames(in: dirURL, named: gifName)
         if !gif.isEmpty { return gif }
 
         // Fallbacks: numbered PNGs, then a single sprite sheet (white knocked
@@ -40,16 +47,16 @@ enum TokenAnimation {
 
     // MARK: - Bundle location
 
-    private static func bundleDirectory() -> URL? {
-        Bundle.module.url(forResource: framesDir, withExtension: nil)
+    private static func bundleDirectory(_ name: String) -> URL? {
+        Bundle.module.url(forResource: name, withExtension: nil)
     }
 
     // MARK: - Animated GIF
 
-    /// Load every frame of `token.gif` in order via ImageIO. Returns `[]` if the
-    /// GIF is absent or unreadable.
-    private static func loadGIFFrames(in dir: URL) -> [NSImage] {
-        let gifURL = dir.appendingPathComponent("token.gif")
+    /// Load every frame of the named GIF in order via ImageIO. Returns `[]` if
+    /// the GIF is absent or unreadable.
+    private static func loadGIFFrames(in dir: URL, named gifName: String) -> [NSImage] {
+        let gifURL = dir.appendingPathComponent(gifName)
         guard let source = CGImageSourceCreateWithURL(gifURL as CFURL, nil) else { return [] }
         let count = CGImageSourceGetCount(source)
         guard count > 0 else { return [] }
