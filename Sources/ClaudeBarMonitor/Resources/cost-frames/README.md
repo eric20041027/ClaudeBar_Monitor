@@ -15,9 +15,21 @@ The cost face swaps the engineer animation by cost level, matching the
 
 | Level  | GIF         | Mood                          |
 | ------ | ----------- | ----------------------------- |
-| `calm` | `calm.gif`  | leisurely typing              |
-| `busy` | `busy.gif`  | fast typing, sweating         |
+| `calm` | `calm.gif`  | relaxed, hands on the laptop  |
+| `busy` | `busy.gif`  | leaning in, focused typing    |
 | `hot`  | `hot.gif`   | head-in-hands panic           |
+
+### Source art
+
+These are built from the **pixellab "Engineer Calm"** character group, **south**
+(front-facing) rotation so the face and pose read clearly on the Touch Bar. The
+source stills live in `assets/pixellab-engineer-south/`. pixellab only produced
+a real animation for the side (east) direction, so the front stills are animated
+*procedurally* — a small per-state motion (calm breathing bob / busy typing
+jitter / hot nervous shake) — by `scripts/gen_engineer_gifs_pixellab.py`, which
+also union-bbox crops each set to FILL the canvas (see the Touch Bar shrink note
+below). Re-run that script to regenerate. (The earlier hand-drawn Pillow set
+came from `scripts/gen_engineer_gifs.py`, kept for reference.)
 
 Each is loaded by
 `TokenAnimation.loadFrames(directory: "cost-frames", gifName: level.gifName)`
