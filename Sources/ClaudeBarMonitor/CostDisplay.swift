@@ -34,10 +34,10 @@ struct CostDisplay {
     let text: String
     let level: CostLevel
 
-    /// USD thresholds separating calm / busy / hot. Demo values; tune once the
-    /// real transcript-backed cost is wired in.
-    static let busyThreshold = 5.0
-    static let hotThreshold = 12.0
+    /// USD thresholds separating calm / busy / hot session cost.
+    /// calm < $10 ≤ busy < $25 ≤ hot.
+    static let busyThreshold = 10.0
+    static let hotThreshold = 25.0
 
     static func from(cost: Double) -> CostDisplay {
         let level: CostLevel
