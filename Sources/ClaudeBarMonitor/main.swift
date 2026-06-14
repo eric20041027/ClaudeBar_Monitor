@@ -5,6 +5,11 @@ private let pollInterval: TimeInterval = 4 * 60   // 4 minutes (spec: 3-5 min)
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let client = UsageClient()
     private var controller: TouchBarController!
+
+    // Session cost shown on the gauge's alternate (tap-to-toggle) face. Real
+    // spend, computed from the newest Claude Code transcript.
+    private let costProvider: CostProviding = TranscriptCostProvider()
+
     private var timer: Timer?
     private var lastResult: UsageResult = .needsLogin
 
@@ -21,6 +26,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() {
+        // The transcript can be multi-MB, so price it off the main thread and
+        // hop back to update the Touch Bar. Capture into a local `let` to avoid
+        // capturing the implicitly-unwrapped `var controller` in the closure.
+        let costController = controller!
+        let provider = costProvider
+        Task.detached {
+            let cost = provider.currentSessionCost()
+            await MainActor.run {
+                costController.updateCost(CostDisplay.from(cost: cost))
+            }
+        }
+
         Task {
             let result = await client.fetch()
             lastResult = result
