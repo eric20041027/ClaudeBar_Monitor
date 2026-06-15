@@ -83,6 +83,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// Refuse to start if another instance already holds the singleton lock —
+// otherwise both would fight over the single Control Strip slot and the Touch
+// Bar item would flicker in and out. See SingleInstance for the why.
+guard SingleInstance.acquire() else {
+    FileHandle.standardError.write(Data(
+        "ClaudeBar Monitor is already running; this instance will exit.\n".utf8))
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
