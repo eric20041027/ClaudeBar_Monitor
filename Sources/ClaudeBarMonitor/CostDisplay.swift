@@ -35,9 +35,9 @@ struct CostDisplay {
     let level: CostLevel
 
     /// USD thresholds separating calm / busy / hot session cost.
-    /// calm < $10 ≤ busy < $25 ≤ hot.
-    static let busyThreshold = 10.0
-    static let hotThreshold = 25.0
+    /// calm < $35 ≤ busy < $50 ≤ hot.
+    static let busyThreshold = 35.0
+    static let hotThreshold = 50.0
 
     static func from(cost: Double) -> CostDisplay {
         let level: CostLevel
