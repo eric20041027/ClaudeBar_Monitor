@@ -37,6 +37,14 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
     private let costFallbackFrames: [NSImage]
     private var frameIndex = 0
     private var animationTimer: Timer?
+    /// Re-asserts Control Strip presence periodically. macOS sometimes drops the
+    /// item (Control Strip reset, ControlStrip agent restart) while our process
+    /// keeps running — the item just vanishes from the Touch Bar. Re-registering
+    /// is idempotent (no-op if already present), so a slow timer quietly heals it.
+    private var presenceTimer: Timer?
+    /// How often to re-assert Control Strip presence. Slow — this is a self-heal
+    /// safety net, not a hot path.
+    private static let presenceReassertInterval: TimeInterval = 20
 
     private var mode: Mode = .gauge
 
@@ -73,11 +81,27 @@ final class TouchBarController: NSObject, NSTouchBarDelegate {
         button.isBordered = false
         registerInControlStrip()
         startAnimation()
+        startPresenceReassert()
         render()
     }
 
     deinit {
         animationTimer?.invalidate()
+        presenceTimer?.invalidate()
+    }
+
+    /// Periodically re-assert Control Strip presence so the item self-heals if
+    /// macOS dropped it while the process kept running. Only re-toggles the
+    /// presence flag (the part the system actually clears) — it does NOT rebuild
+    /// the tray item or re-add the button, avoiding any view-reparenting churn.
+    private func startPresenceReassert() {
+        let t = Timer.scheduledTimer(
+            withTimeInterval: Self.presenceReassertInterval, repeats: true
+        ) { _ in
+            ControlStripPresence.set(Self.itemIdentifier.rawValue, present: true)
+        }
+        t.tolerance = Self.presenceReassertInterval * 0.5
+        presenceTimer = t
     }
 
     /// Frames for the current face. The cost face picks the engineer GIF for the
