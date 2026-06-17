@@ -21,6 +21,21 @@ BUNDLE_NAME="ClaudeBarMonitor_ClaudeBarMonitor.bundle"
 
 stop_agent() {
     launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
+    # Force-clear ANY remaining ClaudeBarMonitor process, not just the
+    # LaunchAgent — e.g. a manual `swift run` debug build (.build/.../debug or
+    # release). Two instances fight over the single Control Strip slot and the
+    # Touch Bar item flickers / falls back to the coin GIF. The single-instance
+    # flock only blocks instances started AFTER one holds the lock, so a stray
+    # already-running copy must be killed here.
+    #
+    # Match the executable PATH ending in "/$BIN_NAME" (the launched binary is
+    # always invoked by full path with no trailing args), NOT a loose substring:
+    # the repo dir is "ClaudeBar_Monitor" (underscore) while the binary is
+    # "ClaudeBarMonitor" (no underscore), so an anchored "/ClaudeBarMonitor$"
+    # can't match this script's own cmdline or the repo path. ($ end-anchor,
+    # not \b — BSD pgrep/pkill regex does not honor \b.) We're inside install
+    # (about to (re)install), so no instance here is worth keeping alive.
+    pkill -f "/$BIN_NAME\$" 2>/dev/null || true
 }
 
 uninstall() {
